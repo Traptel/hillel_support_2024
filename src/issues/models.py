@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import Q
-
 from users.models import User
 
 ISSUE_STATUS_CHOICES = (
@@ -10,9 +9,9 @@ ISSUE_STATUS_CHOICES = (
 )
 
 
-class IssueManagers(models.Manager):
-    def filter_by_participent(self, user: User):
-        return self.model.filter(Q(junior=user) | Q(senior=user))
+class IssueManager(models.Manager):
+    def filter_by_participant(self, user: User):
+        return self.filter(Q(junior=user) | Q(senior=user))
 
 
 class Issue(models.Model):
@@ -21,14 +20,14 @@ class Issue(models.Model):
     status = models.PositiveSmallIntegerField(choices=ISSUE_STATUS_CHOICES)
 
     junior = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="junior_issue"
+        User, on_delete=models.CASCADE, related_name="junior_issues"
     )
     senior = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="senior_issue", null=True
+        User, on_delete=models.CASCADE, related_name="senior_issues", null=True
     )
-    rating = models.PositiveSmallIntegerField(null=True, blank=True)
 
-    objects = IssueManagers()
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    objects = IssueManager()
 
     def __repr__(self) -> str:
         return f"Issue[{self.pk} {self.title[:10]}]"
@@ -42,8 +41,8 @@ class Message(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="user_massege"
+        User, on_delete=models.CASCADE, related_name="user_messages"
     )
     issue = models.ForeignKey(
-        Issue, on_delete=models.CASCADE, related_name="issue_massege"
+        Issue, on_delete=models.CASCADE, related_name="issue_messages"
     )
