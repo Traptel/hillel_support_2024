@@ -120,9 +120,7 @@ def messages_api_dispatcher(request: Request, issue_id: int):
     else:
         if issue.status != Status.IN_PROGRESS:
             return response.Response(
-                {
-                    "message": "Писати можна тільки в активні запити (In Progress)"
-                },
+                {"message": "Писати можна тільки в активні запити"},
                 status=403,
             )
 
