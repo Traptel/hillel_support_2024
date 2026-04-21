@@ -8,18 +8,21 @@ from users.enums import Role
 
 from .enums import Status
 from .models import Issue, Message
+from drf_yasg.utils import swagger_auto_schema
 
 
 class IssueSerializer(serializers.ModelSerializer):
     status = serializers.CharField(required=False)
     junior = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
+    senior_email = serializers.CharField(source="senior.email", read_only=True)
+
     class Meta:
         model = Issue
         fields = "__all__"
 
     def validate(self, attrs):
-        attrs["status"] = Status.OPEND
+        attrs["status"] = Status.OPENED
         return attrs
 
 
@@ -82,6 +85,8 @@ class MessegaSerializer(serializers.ModelSerializer):
     user = serializers.HiddenField(default=serializers.CurrentUserDefault())
     issue = serializers.PrimaryKeyRelatedField(queryset=Issue.objects.all())
 
+    author_role = serializers.CharField(source="user.role", read_only=True)
+
     class Meta:
         model = Message
         fields = "__all__"
@@ -98,54 +103,85 @@ class MessegaSerializer(serializers.ModelSerializer):
 
 @api_view(["GET", "POST"])
 def messages_api_dispatcher(request: Request, issue_id: int):
-    if request.method == "GET":
-        # messages = Message.objects.filter(
-        # Q(
-        #     issue__id=issue_id,
-        #     issue__junior = request.user
-        # )
-        # | Q(
-        #     issue__id = issue_id,
-        #     issue__senior = request.user
-        # )
-        messages = Message.objects.filter(
-            Q(issue__id=issue_id)
-            & (Q(issue__senior=request.user) | Q(issue__junior=request.user))
-        ).order_by("-timestamp")
-        serializers = MessegaSerializer(messages, many=True)
 
-        return response.Response(serializers.data)
-    else:
+    try:
         issue = Issue.objects.get(id=issue_id)
-        payload = request.data | {"issue": issue.id}
+    except Issue.DoesNotExist:
+        return response.Response({"message": "Запит не знайдено"}, status=404)
 
+    if request.user not in [issue.junior, issue.senior]:
+        raise PermissionDenied("Ви не є учасником цього чату")
+
+    if request.method == "GET":
+        messages = Message.objects.filter(issue=issue).order_by("-timestamp")
+        serializers = MessegaSerializer(messages, many=True)
+        return response.Response(serializers.data)
+
+    else:
+        if issue.status != Status.IN_PROGRESS:
+            return response.Response(
+                {
+                    "message": "Писати можна тільки в активні запити (In Progress)"
+                },
+                status=403,
+            )
+
+        payload = request.data | {"issue": issue.id}
         serializer = MessegaSerializer(
             data=payload, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return response.Response(serializer.validated_data)
+        return response.Response(serializer.data)
 
 
+class IssueCloseSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(
+        min_value=1, max_value=5, help_text="Оцінка від 1 до 5"
+    )
+
+
+@swagger_auto_schema(method="put", request_body=IssueCloseSerializer)
 @api_view(["PUT"])
 def issues_close(request: Request, id: int):
-    issue = Issue.objects.get(id=id)
-    if request.user.role != Role.SENIOR:
-        raise PermissionError("Only senior users can close issues")
+    try:
+        issue = Issue.objects.get(id=id)
+    except Issue.DoesNotExist:
+        return response.Response({"message": "Запит не знайдено"}, status=404)
+
+    if request.user != issue.junior:
+        raise PermissionDenied(
+            "Тільки автор запиту може його закрити та оцінити"
+        )
 
     if issue.status != Status.IN_PROGRESS:
-        raise response.Response(
-            {"message": "Issue is not In progress"}, status=422
+        return response.Response(
+            {"message": "Можна закрити лише запит, який знаходиться в роботі"},
+            status=422,
         )
-    else:
-        issue.senior = request.user
-        issue.status = Status.CLOSED
-        issue.save()
 
-    serializers = IssueSerializer(issue)
+    rating = request.data.get("rating")
+    if rating is None:
+        return response.Response(
+            {"message": "Необхідно вказати оцінку (rating)"}, status=400
+        )
 
-    return response.Response(serializers.data)
+    try:
+        rating = int(rating)
+        if not (1 <= rating <= 5):
+            raise ValueError()
+    except ValueError:
+        return response.Response(
+            {"message": "Оцінка має бути цілим числом від 1 до 5"}, status=400
+        )
+
+    issue.status = Status.CLOSED
+    issue.rating = rating
+    issue.save()
+
+    serializer = IssueSerializer(issue)
+    return response.Response(serializer.data)
 
 
 @api_view(["PUT"])

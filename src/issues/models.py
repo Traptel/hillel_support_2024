@@ -26,6 +26,7 @@ class Issue(models.Model):
     senior = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="senior_issue", null=True
     )
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
 
     objects = IssueManagers()
 
