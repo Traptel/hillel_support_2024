@@ -15,4 +15,4 @@ jobs:
       - name: Run fomatters
         run: python -m black --check . && python -m isort --check .
       - name: Run linter
-        run: python -m ruff .
+        run: python -m ruff check .
