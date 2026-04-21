@@ -1,4 +1,5 @@
 from django.db.models import Q
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, response, serializers
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
@@ -8,7 +9,6 @@ from users.enums import Role
 
 from .enums import Status
 from .models import Issue, Message
-from drf_yasg.utils import swagger_auto_schema
 
 
 class IssueSerializer(serializers.ModelSerializer):
